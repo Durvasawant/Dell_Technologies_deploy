@@ -195,4 +195,4 @@ consistency = st.number_input("Session Duration Std Dev (Consistency Score)", mi
 if st.button("Predict Engagement"):
     prediction = model.predict([[absence_rate, session_duration, pages_viewed, consistency]])
     result = "Engaged" if prediction[0] == 1 else "At Risk"
-    st.success(f"Predicted Engagement Status: {result}")
+    st.success(f"Predicted Engagement Status: {result}")  give proper 
