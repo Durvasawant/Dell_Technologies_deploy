@@ -112,31 +112,6 @@ event_counts = filtered_events['EventName'].value_counts()
 st.bar_chart(event_counts)
 
 
-# ==============================
-# LMS Usage Patterns
-# ==============================
-st.subheader("💻 LMS Usage Patterns")
-
-# LMS Consistency Score — Std deviation
-lms_df['Consistency'] = lms_df.groupby("StudentID")['SessionDuration'].transform(lambda x: x.std())
-
-lms_summary = filtered_lms.groupby('StudentID')[['SessionDuration', 'PagesViewed', 'Consistency']].mean()
-st.dataframe(lms_summary)
-
-
-# ==============================
-# Heatmap – LMS Weekly Trend
-# ==============================
-st.subheader("📅 LMS Weekly Activity Heatmap")
-
-filtered_lms['Date'] = pd.to_datetime(filtered_lms['Date'])
-filtered_lms['Week'] = filtered_lms['Date'].dt.isocalendar().week
-
-weekly_usage = filtered_lms.pivot_table(values='SessionDuration',
-                                        index='StudentID',
-                                        columns='Week',
-                                        aggfunc='mean',
-                                        fill_value=0)
 
 fig, ax = plt.subplots(figsize=(10, 4))
 sns.heatmap(weekly_usage, ax=ax)
