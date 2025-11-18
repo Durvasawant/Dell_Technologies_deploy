@@ -23,16 +23,17 @@ attendance_df['Date'] = pd.to_datetime(attendance_df['Date'])
 # ==============================
 st.sidebar.header("🔍 Filters")
 
-# Student selection
 students = attendance_df['StudentID'].unique()
 selected_students = st.sidebar.multiselect("Select Students", students, default=students)
 
-# Date filter
+# Date range filter
 date_range = st.sidebar.date_input("Select Date Range", [])
 if len(date_range) == 2:
     start, end = date_range
-    attendance_df = attendance_df[(attendance_df["Date"] >= pd.to_datetime(start)) &
-                                  (attendance_df["Date"] <= pd.to_datetime(end))]
+    attendance_df = attendance_df[
+        (attendance_df["Date"] >= pd.to_datetime(start)) &
+        (attendance_df["Date"] <= pd.to_datetime(end))
+    ]
 
 # Event type filter
 if "EventType" in events_df.columns:
@@ -44,7 +45,6 @@ if "EventType" in events_df.columns:
 filtered_attendance = attendance_df[attendance_df['StudentID'].isin(selected_students)]
 filtered_events = events_df[events_df['StudentID'].isin(selected_students)]
 filtered_lms = lms_df[lms_df['StudentID'].isin(selected_students)]
-
 
 # ==============================
 # Dashboard KPIs
@@ -63,7 +63,6 @@ col2.metric("Avg Session Duration", f"{avg_session_duration:.1f} mins")
 col3.metric("Avg Pages Viewed", f"{avg_pages:.1f}")
 col4.metric("Total Events Attended", total_events)
 
-
 # ==============================
 # Attendance Trends
 # ==============================
@@ -72,19 +71,19 @@ st.subheader("📋 Attendance Trends")
 attendance_summary = filtered_attendance.groupby(['Date', 'Status']).size().unstack(fill_value=0)
 st.line_chart(attendance_summary)
 
-
 # ==============================
-# EXTRA ANALYTICS — New Data Points
+# Additional Attendance Insights
 # ==============================
-
 st.subheader("📌 Additional Attendance Insights")
 
 # Attendance percentage per student
-att_pct = (filtered_attendance['Status'].eq("Present")
-           .groupby(filtered_attendance['StudentID'])
-           .mean() * 100).reset_index(name="Attendance%")
+att_pct = (
+    filtered_attendance['Status'].eq("Present")
+    .groupby(filtered_attendance['StudentID'])
+    .mean() * 100
+).reset_index(name="Attendance%")
 
-# Consecutive absences
+# Longest absence streak
 def longest_absence_streak(df):
     df = df.sort_values("Date")
     streak = max_streak = 0
@@ -100,9 +99,7 @@ absence_streak = filtered_attendance.groupby("StudentID").apply(longest_absence_
 absence_streak = absence_streak.reset_index(name="MaxAbsenceStreak")
 
 att_extra = pd.merge(att_pct, absence_streak, on="StudentID")
-
 st.dataframe(att_extra)
-
 
 # ==============================
 # Event Participation
@@ -111,21 +108,44 @@ st.subheader("🎓 Event Participation")
 event_counts = filtered_events['EventName'].value_counts()
 st.bar_chart(event_counts)
 
+# ==============================
+# LMS Weekly Heatmap (FIXED)
+# ==============================
+st.subheader("📅 LMS Weekly Activity Heatmap")
 
+if not filtered_lms.empty:
+    filtered_lms['Date'] = pd.to_datetime(filtered_lms['Date'])
+    filtered_lms['Week'] = filtered_lms['Date'].dt.isocalendar().week
 
-fig, ax = plt.subplots(figsize=(10, 4))
-sns.heatmap(weekly_usage, ax=ax)
-st.pyplot(fig)
+    weekly_usage = filtered_lms.pivot_table(
+        values='SessionDuration',
+        index='StudentID',
+        columns='Week',
+        aggfunc='mean',
+        fill_value=0
+    )
 
+    if weekly_usage.empty:
+        st.warning("Not enough LMS data to display heatmap.")
+    else:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        sns.heatmap(weekly_usage, ax=ax)
+        st.pyplot(fig)
+else:
+    st.warning("No LMS data for selected students.")
 
 # ==============================
 # Correlation Analysis
 # ==============================
 st.subheader("📈 Correlation Between Metrics")
 
-corr_data = ml_data = pd.merge(
-    attendance_df.groupby('StudentID')['Status'].apply(lambda x: (x == 'Absent').mean()).reset_index(name='AbsenceRate'),
-    lms_df.groupby('StudentID')[['SessionDuration', 'PagesViewed']].mean().reset_index(),
+corr_data = pd.merge(
+    attendance_df.groupby('StudentID')['Status']
+    .apply(lambda x: (x == 'Absent').mean()).reset_index(name='AbsenceRate'),
+
+    lms_df.groupby('StudentID')[['SessionDuration', 'PagesViewed']]
+    .mean().reset_index(),
+
     on='StudentID'
 )
 
@@ -135,13 +155,18 @@ fig, ax = plt.subplots()
 sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
 st.pyplot(fig)
 
-
 # ==============================
-# ML Model — Expanded Features
+# ML Model
 # ==============================
 st.subheader("🤖 Predict Student Engagement Risk")
 
-ml_data['Consistency'] = lms_df.groupby("StudentID")['SessionDuration'].std().reset_index(drop=True)
+lms_df['Consistency'] = (
+    lms_df.groupby("StudentID")['SessionDuration']
+    .transform(lambda x: x.std() if len(x) > 1 else 0)
+)
+
+ml_data = corr_data.copy()
+ml_data['Consistency'] = lms_df.groupby("StudentID")['Consistency'].mean().values
 
 ml_data['Engagement'] = (ml_data['AbsenceRate'] < 0.2).astype(int)
 
@@ -156,7 +181,6 @@ y_pred = model.predict(X_test)
 
 st.text("Model Performance:")
 st.text(classification_report(y_test, y_pred))
-
 
 # ==============================
 # Predict New Student
